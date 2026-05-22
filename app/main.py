@@ -99,8 +99,11 @@ def create_app() -> FastAPI:
     templates.env.filters["text_on"] = _text_on
     app.state.templates = templates
 
+    # Static dir must exist before this point. We don't mkdir at runtime
+    # because the systemd unit's ProtectSystem=strict makes /opt read-only —
+    # the pathlib mkdir would raise EROFS even with exist_ok=True. The dir is
+    # tracked in git via a .gitkeep so a fresh clone has it.
     static_dir = base / "static"
-    static_dir.mkdir(exist_ok=True)
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
     # Routes
