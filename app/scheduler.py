@@ -338,8 +338,11 @@ def _recover_active_overrides() -> None:
 
         for ov in rows:
             override_id = ov.id
-            start_at = ov.start_at
-            end_at = ov.end_at
+            # SQLite drops tzinfo on read even though the column is
+            # DateTime(timezone=True). Re-attach UTC so the comparisons
+            # against `now` (aware) don't raise TypeError.
+            start_at = ov.start_at if ov.start_at.tzinfo else ov.start_at.replace(tzinfo=timezone.utc)
+            end_at = ov.end_at if ov.end_at.tzinfo else ov.end_at.replace(tzinfo=timezone.utc)
 
             def _recover_release() -> None:
                 """Stop effect / clear direct override / fire release trigger."""
