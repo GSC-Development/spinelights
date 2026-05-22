@@ -26,16 +26,17 @@ from sqlalchemy import select
 
 from app.config import get_settings
 from app.db import session_scope
+from app.effects import EffectEngine
 from app.models import AuditAction, AuditLog, Override, OverrideStatus
 from app.tpc import TPCClient, TPCError
 
 logger = logging.getLogger(__name__)
 
 
-# Module-level handle to the TPC client; set during init() so APScheduler jobs
-# (which are loaded by class path) can reach it without serialising the client
-# into the job kwargs.
+# Module-level handles set during init() so APScheduler jobs (which are loaded
+# by class path) can reach them without serialising into job kwargs.
 _tpc_client: TPCClient | None = None
+_effect_engine: EffectEngine | None = None
 _scheduler: BackgroundScheduler | None = None
 
 
@@ -76,6 +77,33 @@ def run_start_job(override_id: str) -> None:
             logger.info("Override %s was cancelled; skipping start", override_id)
             return
 
+        if ov.is_effect:
+            # Effect path — kick off the engine. The engine itself handles
+            # per-tick pushes; we just record start/end.
+            try:
+                if _effect_engine is None:
+                    raise TPCError("effect engine not initialised")
+                _effect_engine.start(ov.effect_name, ov.effect_params)
+            except (TPCError, ValueError) as e:
+                logger.exception("Failed to start effect %s for %s", ov.effect_name, override_id)
+                ov.status = OverrideStatus.FAILED
+                ov.fire_error = str(e)
+                s.add(AuditLog(
+                    actor_username="scheduler",
+                    action=AuditAction.OVERRIDE_FAILED,
+                    target_type="override", target_id=override_id,
+                    detail=f"effect {ov.effect_name} failed to start: {e}",
+                ))
+                return
+            ov.status = OverrideStatus.ACTIVE
+            s.add(AuditLog(
+                actor_username="scheduler",
+                action=AuditAction.OVERRIDE_FIRED,
+                target_type="override", target_id=override_id,
+                detail=f"started effect {ov.effect_name} params={ov.effect_params_json or '{}'}",
+            ))
+            return
+
         if ov.is_custom_colour:
             # Direct-RGB override path
             ch = ov.color_hex.lstrip("#")
@@ -102,7 +130,7 @@ def run_start_job(override_id: str) -> None:
             ))
             return
 
-        # Scene-based path
+        # Scene-based path (legacy)
         trig = ov.scene.trigger_num
         try:
             _tpc_client.fire_trigger(trig)
@@ -148,6 +176,23 @@ def run_end_job(override_id: str) -> None:
             return
         if ov.status == OverrideStatus.CANCELLED:
             logger.info("Override %s was cancelled; skipping release", override_id)
+            return
+
+        if ov.is_effect:
+            try:
+                if _effect_engine is not None:
+                    _effect_engine.stop()  # also clears the per-fixture overrides
+                ov.status = OverrideStatus.COMPLETED
+                ov.completed_at = datetime.now(timezone.utc)
+                s.add(AuditLog(
+                    actor_username="scheduler",
+                    action=AuditAction.OVERRIDE_RELEASED,
+                    target_type="override", target_id=override_id,
+                    detail=f"stopped effect {ov.effect_name}",
+                ))
+            except Exception as e:  # noqa: BLE001
+                logger.exception("Failed to stop effect for %s", override_id)
+                ov.fire_error = (ov.fire_error or "") + f" | effect stop failed: {e}"
             return
 
         if ov.is_custom_colour:
@@ -201,10 +246,11 @@ def run_end_job(override_id: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-def init(tpc: TPCClient) -> BackgroundScheduler:
+def init(tpc: TPCClient, effect_engine: EffectEngine) -> BackgroundScheduler:
     """Create the scheduler, attach the SQLite jobstore, run boot recovery."""
-    global _tpc_client, _scheduler
+    global _tpc_client, _effect_engine, _scheduler
     _tpc_client = tpc
+    _effect_engine = effect_engine
 
     settings = get_settings()
     jobstore = SQLAlchemyJobStore(url=settings.sqlalchemy_url, tablename="apscheduler_jobs")
@@ -296,14 +342,21 @@ def _recover_active_overrides() -> None:
             end_at = ov.end_at
 
             def _recover_release() -> None:
-                """Either clear direct-RGB override or fire the release trigger."""
-                if ov.is_custom_colour:
+                """Stop effect / clear direct override / fire release trigger."""
+                if ov.is_effect:
+                    if _effect_engine is not None:
+                        _effect_engine.stop()
+                elif ov.is_custom_colour:
                     _tpc_client.clear_overrides(fade_seconds=1.0)
                 elif ov.scene is not None:
                     _tpc_client.fire_trigger(ov.scene.release_trigger_num)
 
             def _recover_start() -> None:
-                if ov.is_custom_colour:
+                if ov.is_effect:
+                    if _effect_engine is None:
+                        raise TPCError("effect engine not initialised on boot recovery")
+                    _effect_engine.start(ov.effect_name, ov.effect_params)
+                elif ov.is_custom_colour:
                     ch = ov.color_hex.lstrip("#")
                     r, g, b = int(ch[0:2], 16), int(ch[2:4], 16), int(ch[4:6], 16)
                     _tpc_client.set_override_color(r, g, b, target="group", num=0, fade_seconds=1.0)

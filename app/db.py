@@ -66,8 +66,21 @@ def session_scope() -> Iterator[Session]:
 
 
 def init_schema() -> None:
-    """Create all tables. Safe to call repeatedly."""
+    """Create all tables + apply additive column migrations. Safe to call repeatedly."""
     # Import models so they register with Base.metadata
     from app import models  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
+
+    # Additive column migrations. SQLite `ALTER TABLE ADD COLUMN` is idempotent
+    # only via try/except — there's no IF NOT EXISTS for ADD COLUMN.
+    _additive_migrations = [
+        "ALTER TABLE overrides ADD COLUMN effect_name VARCHAR(32)",
+        "ALTER TABLE overrides ADD COLUMN effect_params_json TEXT",
+    ]
+    with engine.begin() as conn:
+        for stmt in _additive_migrations:
+            try:
+                conn.exec_driver_sql(stmt)
+            except Exception:
+                pass  # column already exists

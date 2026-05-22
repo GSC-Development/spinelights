@@ -137,11 +137,12 @@ class DailyTimeline(Base):
 class Override(Base):
     """A time-bounded lighting takeover.
 
-    Exactly one of scene_id or color_hex must be set:
-      - scene_id  -> fires the scene's trigger at start, release trigger at end
-                     (supports any Pharos scene/effect; uses the .pd2 palette)
-      - color_hex -> sets /api/override to that RGB on group 0 at start,
-                     clears /api/override at end (any colour, solid only)
+    Exactly ONE of these is set on a given override:
+      - color_hex      -> static RGB on group 0 (any solid colour)
+      - effect_name    -> kick off the named effect via EffectEngine, stop at end
+      - scene_id       -> LEGACY: fires the scene's start trigger at start_at,
+                          release trigger at end_at. Kept for back-compat; new
+                          overrides should use color_hex or effect_name.
     """
 
     __tablename__ = "overrides"
@@ -152,6 +153,8 @@ class Override(Base):
     end_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     scene_id: Mapped[Optional[str]] = mapped_column(ForeignKey("scenes.id"), nullable=True)
     color_hex: Mapped[Optional[str]] = mapped_column(String(7), nullable=True)
+    effect_name: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    effect_params_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     status: Mapped[OverrideStatus] = mapped_column(
         Enum(OverrideStatus), nullable=False, default=OverrideStatus.SCHEDULED, index=True
     )
@@ -174,16 +177,35 @@ class Override(Base):
         )
 
     @property
+    def effect_params(self) -> dict:
+        """Decoded effect_params_json. Empty dict if unset/malformed."""
+        import json
+        if not self.effect_params_json:
+            return {}
+        try:
+            return json.loads(self.effect_params_json)
+        except Exception:
+            return {}
+
+    @property
     def swatch(self) -> str:
-        """Hex colour to display for this override (from scene or direct colour)."""
+        """Representative hex colour for the row indicator / live panel."""
+        if self.effect_name:
+            from app.effects import describe_effect
+            sw, _ = describe_effect(self.effect_name, self.effect_params)
+            return sw
         if self.color_hex:
             return self.color_hex
         if self.scene is not None:
             return self.scene.swatch
-        return "#6b7280"  # neutral fallback
+        return "#6b7280"
 
     @property
     def display_scene_label(self) -> str:
+        if self.effect_name:
+            from app.effects import describe_effect
+            _, lbl = describe_effect(self.effect_name, self.effect_params)
+            return lbl
         if self.scene is not None:
             return self.scene.display_name
         if self.color_hex:
@@ -192,7 +214,11 @@ class Override(Base):
 
     @property
     def is_custom_colour(self) -> bool:
-        return self.color_hex is not None and self.scene_id is None
+        return self.color_hex is not None and self.scene_id is None and self.effect_name is None
+
+    @property
+    def is_effect(self) -> bool:
+        return self.effect_name is not None
 
 
 class AuditLog(Base):

@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.auth import require_admin, require_user
 from app.config import get_settings
 from app.db import get_db
+from app.effects import PALETTES
 from app.models import Override, OverrideStatus, Role, Scene, User
 from app.services import OverrideValidationError, cancel_override, create_override, find_conflicts
 
@@ -77,7 +78,11 @@ def list_overrides(
     return request.app.state.templates.TemplateResponse(
         request,
         "overrides_list.html",
-        {"user": user, "upcoming": upcoming, "past": past, "local_tz": _local_tz()},
+        {
+            "user": user, "upcoming": upcoming, "past": past,
+            "local_tz": _local_tz(),
+            "settings": get_settings(),
+        },
     )
 
 
@@ -87,29 +92,71 @@ def new_override_form(
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
 ):
-    scenes = list(db.execute(
-        select(Scene).where(Scene.enabled.is_(True)).order_by(Scene.sort_order)
-    ).scalars())
     default_start, default_end = _default_form_times()
     return request.app.state.templates.TemplateResponse(
         request,
         "override_form.html",
         {
             "user": user,
-            "scenes": scenes,
             "error": None,
             "conflicts": [],
+            "settings": get_settings(),
+            "palettes": PALETTES,
             "form": {
                 "name": "",
                 "start_at": default_start,
                 "end_at": default_end,
-                "mode": "scene",
-                "scene_id": "",
+                "mode": "preset",
                 "color_hex": "#3b82f6",
+                "effect_name": "rainbow",
+                "effect_mode": "together",
+                "effect_speed": "medium",
+                "effect_palette": "rainbow",
+                "effect_color_a": "#dc2626",
+                "effect_color_b": "#22c55e",
                 "notes": "",
             },
         },
     )
+
+
+_RAINBOW_SPEED_MAP = {"slow": 1.0, "medium": 2.5, "fast": 12.0}
+_CROSSFADE_DWELL_MAP = {"slow": 8.0, "medium": 4.0, "fast": 2.0}
+_CROSSFADE_FADE_MAP = {"slow": 3.0, "medium": 1.8, "fast": 0.8}
+_TWO_COLOR_DWELL_MAP = {"slow": 6.0, "medium": 3.0, "fast": 1.5}
+_TWO_COLOR_TICK_MAP = {"slow": 0.9, "medium": 0.5, "fast": 0.25}
+
+
+def _build_effect_params(effect_name: str, sub: dict) -> dict:
+    """Turn form fields into the dict expected by the effect engine."""
+    chase = (sub.get("effect_mode") or "together").strip().lower() == "chase"
+    speed = (sub.get("effect_speed") or "medium").strip().lower()
+    if effect_name == "rainbow":
+        return {"speed": _RAINBOW_SPEED_MAP.get(speed, 2.5), "chase": chase}
+    if effect_name == "crossfade":
+        from app.effects import PALETTES
+        palette = (sub.get("effect_palette") or "rainbow").strip().lower()
+        if palette not in PALETTES:
+            palette = "rainbow"
+        return {
+            "palette": palette,
+            "dwell": _CROSSFADE_DWELL_MAP.get(speed, 4.0),
+            "fade": _CROSSFADE_FADE_MAP.get(speed, 1.8),
+            "chase": chase,
+        }
+    if effect_name == "two_color":
+        params: dict = {
+            "color_a": (sub.get("effect_color_a") or "#dc2626").lower(),
+            "color_b": (sub.get("effect_color_b") or "#22c55e").lower(),
+            "chase": chase,
+        }
+        if chase:
+            params["tick"] = _TWO_COLOR_TICK_MAP.get(speed, 0.5)
+        else:
+            params["dwell"] = _TWO_COLOR_DWELL_MAP.get(speed, 3.0)
+            params["fade"] = min(params["dwell"] * 0.4, 2.0)
+        return params
+    return {}
 
 
 @router.post("/overrides/new")
@@ -118,60 +165,69 @@ def create_override_submit(
     name: str = Form(...),
     start_at: str = Form(...),
     end_at: str = Form(...),
-    mode: str = Form("scene"),           # "scene" or "color"
-    scene_id: str = Form(""),
+    mode: str = Form("preset"),          # "preset" | "effect" | "custom"
     color_hex: str = Form(""),
+    effect_name: str = Form(""),
+    effect_mode: str = Form("together"),
+    effect_speed: str = Form("medium"),
+    effect_palette: str = Form("rainbow"),
+    effect_color_a: str = Form("#dc2626"),
+    effect_color_b: str = Form("#22c55e"),
     notes: str = Form(""),
     confirm_overlap: str = Form(""),
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
 ):
-    scenes = list(db.execute(
-        select(Scene).where(Scene.enabled.is_(True)).order_by(Scene.sort_order)
-    ).scalars())
     form = {
         "name": name, "start_at": start_at, "end_at": end_at,
-        "mode": mode, "scene_id": scene_id, "color_hex": color_hex or "#3b82f6",
+        "mode": mode, "color_hex": color_hex or "#3b82f6",
+        "effect_name": effect_name or "rainbow",
+        "effect_mode": effect_mode, "effect_speed": effect_speed,
+        "effect_palette": effect_palette,
+        "effect_color_a": effect_color_a, "effect_color_b": effect_color_b,
         "notes": notes,
     }
+
+    def _render(error: str | None = None, conflicts: list | None = None, status: int = 200):
+        return request.app.state.templates.TemplateResponse(
+            request, "override_form.html",
+            {
+                "user": user, "error": error,
+                "conflicts": conflicts or [], "form": form,
+                "settings": get_settings(),
+                "palettes": PALETTES,
+            },
+            status_code=status,
+        )
+
     try:
         start_dt = _parse_local_datetime(start_at)
         end_dt = _parse_local_datetime(end_at)
     except ValueError:
-        return request.app.state.templates.TemplateResponse(
-            request,
-            "override_form.html",
-            {"user": user, "scenes": scenes, "error": "Invalid date/time format", "conflicts": [], "form": form},
-            status_code=400,
-        )
+        return _render(error="Invalid date/time format", status=400)
 
     conflicts = find_conflicts(db, start_dt, end_dt)
     if conflicts and confirm_overlap != "yes":
-        return request.app.state.templates.TemplateResponse(
-            request,
-            "override_form.html",
-            {"user": user, "scenes": scenes, "error": None, "conflicts": conflicts, "form": form},
-            status_code=200,
-        )
+        return _render(conflicts=conflicts)
+
+    kwargs: dict = {
+        "creator": user, "name": name,
+        "start_at": start_dt, "end_at": end_dt,
+        "notes": notes or None,
+    }
+    if mode == "effect":
+        if not effect_name:
+            return _render(error="Pick an effect", status=400)
+        kwargs["effect_name"] = effect_name
+        kwargs["effect_params"] = _build_effect_params(effect_name, form)
+    else:
+        # both 'preset' and 'custom' produce a single hex.
+        kwargs["color_hex"] = color_hex
 
     try:
-        kwargs: dict = {
-            "creator": user, "name": name,
-            "start_at": start_dt, "end_at": end_dt,
-            "notes": notes or None,
-        }
-        if mode == "color":
-            kwargs["color_hex"] = color_hex
-        else:
-            kwargs["scene_id"] = scene_id
         create_override(db, **kwargs)
     except OverrideValidationError as e:
-        return request.app.state.templates.TemplateResponse(
-            request,
-            "override_form.html",
-            {"user": user, "scenes": scenes, "error": str(e), "conflicts": [], "form": form},
-            status_code=400,
-        )
+        return _render(error=str(e), status=400)
 
     return RedirectResponse(url="/overrides", status_code=303)
 
@@ -188,7 +244,11 @@ def cancel(
         raise HTTPException(status_code=404, detail="override not found")
     if override.created_by_id != user.id and user.role != Role.ADMIN:
         raise HTTPException(status_code=403, detail="you can only cancel your own overrides")
-    cancel_override(db, override=override, actor=user, tpc=request.app.state.tpc)
+    cancel_override(
+        db, override=override, actor=user,
+        tpc=request.app.state.tpc,
+        effect_engine=request.app.state.effect_engine,
+    )
     return RedirectResponse(url="/overrides", status_code=303)
 
 

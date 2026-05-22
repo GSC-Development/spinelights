@@ -1,159 +1,267 @@
 {% extends "base.html" %}
 {% block title %}Add override{% endblock %}
 {% block content %}
-<h1 class="text-2xl font-semibold mb-4">Add override</h1>
 
-{% if error %}
-<div class="mb-4 p-3 bg-red-50 text-red-700 text-sm rounded">{{ error }}</div>
-{% endif %}
+<div class="bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 text-gray-100
+            -mx-4 -my-4 sm:rounded-3xl px-4 sm:px-8 py-6 sm:py-8
+            min-h-[calc(100vh-4rem)] shadow-2xl shadow-black/40">
 
-{% if conflicts %}
-<div class="mb-4 p-4 bg-amber-50 border border-amber-200 rounded">
-  <p class="text-amber-900 font-medium mb-2">This window overlaps {{ conflicts|length }} existing override(s):</p>
-  <ul class="list-disc list-inside text-sm text-amber-800 mb-3">
-    {% for c in conflicts %}
-    <li>{{ c.name }} - {{ c.start_at.strftime("%a %d %b %H:%M") }} to {{ c.end_at.strftime("%H:%M") }} ({{ c.display_scene_label }})</li>
-    {% endfor %}
-  </ul>
-  <p class="text-sm text-amber-900">Submit again to confirm. Last write wins.</p>
-</div>
-{% endif %}
-
-<form method="post" action="/overrides/new" id="override-form" class="bg-white border border-gray-200 rounded-xl p-6 space-y-4">
-  {% if conflicts %}<input type="hidden" name="confirm_overlap" value="yes">{% endif %}
-
-  <label class="block">
-    <span class="text-sm text-gray-700">Name</span>
-    <input name="name" type="text" required value="{{ form.name }}"
-           placeholder="e.g. Private hire - Atrium - Smith wedding"
-           class="mt-1 block w-full rounded border border-gray-300 px-3 py-2 focus:ring-blue-500 focus:border-blue-500">
-  </label>
-
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-    <label class="block">
-      <span class="text-sm text-gray-700">Start</span>
-      <input name="start_at" type="datetime-local" required value="{{ form.start_at }}"
-             class="mt-1 block w-full rounded border border-gray-300 px-3 py-2">
-    </label>
-    <label class="block">
-      <span class="text-sm text-gray-700">End</span>
-      <input name="end_at" type="datetime-local" required value="{{ form.end_at }}"
-             class="mt-1 block w-full rounded border border-gray-300 px-3 py-2">
-    </label>
+  <div class="flex items-baseline justify-between mb-6">
+    <h1 class="text-3xl font-bold tracking-tight">Add override</h1>
+    <a href="/overrides" class="text-sm text-gray-400 hover:text-gray-200">Cancel</a>
   </div>
 
-  <fieldset class="border border-gray-200 rounded-lg p-4">
-    <legend class="text-sm font-medium text-gray-700 px-2">What should the lights do?</legend>
-
-    <div class="flex gap-6 mb-4">
-      <label class="flex items-center gap-2 cursor-pointer">
-        <input type="radio" name="mode" value="scene" id="mode-scene"
-               {% if form.mode != "color" %}checked{% endif %}
-               onchange="updateMode()">
-        <span class="text-sm">Use a scene</span>
-      </label>
-      <label class="flex items-center gap-2 cursor-pointer">
-        <input type="radio" name="mode" value="color" id="mode-color"
-               {% if form.mode == "color" %}checked{% endif %}
-               onchange="updateMode()">
-        <span class="text-sm">Pick a custom colour</span>
-      </label>
+  {# Daily-schedule banner. #}
+  <div class="bg-amber-500/10 border border-amber-400/30 rounded-xl p-4 mb-6 flex items-start gap-3">
+    <svg class="w-5 h-5 text-amber-300 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24"
+         stroke-width="2" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round"
+            d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+    </svg>
+    <div class="text-sm">
+      <p class="font-semibold text-amber-100">
+        Daily schedule {{ "%02d:%02d"|format(settings.daily_start_hour, settings.daily_start_minute) }}
+        – {{ "%02d:%02d"|format(settings.daily_release_hour, settings.daily_release_minute) }}
+      </p>
+      <p class="text-amber-200/80">
+        Earliest start time:
+        {{ "%02d:%02d"|format(settings.daily_release_hour, settings.daily_release_minute + 1) }}.
+      </p>
     </div>
+  </div>
 
-    <div id="mode-scene-fields">
+  {% if error %}
+  <div class="mb-4 p-3 bg-red-500/10 border border-red-400/40 text-red-200 text-sm rounded-xl">{{ error }}</div>
+  {% endif %}
+
+  {% if conflicts %}
+  <div class="mb-4 p-4 bg-amber-500/10 border border-amber-400/40 rounded-xl">
+    <p class="text-amber-100 font-medium mb-2">This window overlaps {{ conflicts|length }} existing override(s):</p>
+    <ul class="list-disc list-inside text-sm text-amber-200/90 mb-3">
+      {% for c in conflicts %}
+      <li>{{ c.name }} — {{ c.start_at.strftime("%a %d %b %H:%M") }} to {{ c.end_at.strftime("%H:%M") }} ({{ c.display_scene_label }})</li>
+      {% endfor %}
+    </ul>
+    <p class="text-sm text-amber-100">Submit again to confirm. Last write wins.</p>
+  </div>
+  {% endif %}
+
+  <form method="post" action="/overrides/new" id="override-form"
+        class="bg-white/[0.04] ring-1 ring-white/10 rounded-2xl p-6 space-y-6 backdrop-blur-sm">
+    {% if conflicts %}<input type="hidden" name="confirm_overlap" value="yes">{% endif %}
+
+    {# ─── When + name ─────────────────────────────────────────────────── #}
+    <div class="grid sm:grid-cols-2 gap-4">
       <label class="block">
-        <span class="text-xs text-gray-500">Scene</span>
-        <select name="scene_id" id="scene-select"
-                class="mt-1 block w-full rounded border border-gray-300 px-3 py-2 bg-white">
-          <option value="">-- choose --</option>
-          {% for s in scenes %}
-          <option value="{{ s.id }}" data-swatch="{{ s.swatch }}" data-name="{{ s.display_name }}"
-                  {% if form.scene_id == s.id %}selected{% endif %}>
-            {{ s.display_name }}
-          </option>
-          {% endfor %}
-        </select>
+        <span class="text-[10px] uppercase tracking-[0.2em] text-gray-400">Start</span>
+        <input name="start_at" type="datetime-local" required value="{{ form.start_at }}"
+               class="mt-1 block w-full rounded-lg bg-gray-900/80 border border-white/20 px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500">
+      </label>
+      <label class="block">
+        <span class="text-[10px] uppercase tracking-[0.2em] text-gray-400">End</span>
+        <input name="end_at" type="datetime-local" required value="{{ form.end_at }}"
+               class="mt-1 block w-full rounded-lg bg-gray-900/80 border border-white/20 px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500">
       </label>
     </div>
 
-    <div id="mode-color-fields" class="hidden">
-      <div class="flex items-end gap-3">
-        <label class="block">
-          <span class="text-xs text-gray-500">Colour</span>
-          <input type="color" name="color_hex" id="color-input" value="{{ form.color_hex }}"
-                 class="mt-1 h-12 w-20 rounded border border-gray-300 cursor-pointer">
+    <label class="block">
+      <span class="text-[10px] uppercase tracking-[0.2em] text-gray-400">Event name</span>
+      <input name="name" type="text" required value="{{ form.name }}"
+             placeholder="e.g. Private hire — Atrium — Smith wedding"
+             class="mt-1 block w-full rounded-lg bg-gray-900/80 border border-white/20 px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500">
+    </label>
+
+    {# ─── Mode tabs ──────────────────────────────────────────────────── #}
+    <div>
+      <span class="text-[10px] uppercase tracking-[0.2em] text-gray-400 block mb-2">What should the lights do?</span>
+
+      <div class="inline-flex bg-gray-900/60 ring-1 ring-white/10 rounded-xl p-1 mb-4">
+        {% for m, lbl in [("preset", "Preset"), ("effect", "Effect"), ("custom", "Custom")] %}
+        <label class="cursor-pointer">
+          <input type="radio" name="mode" value="{{ m }}" class="peer sr-only"
+                 onchange="setMode('{{ m }}')"
+                 {% if form.mode == m %}checked{% endif %}>
+          <span class="block px-4 py-2 text-sm font-semibold rounded-lg transition-colors
+                       peer-checked:bg-blue-500 peer-checked:text-white
+                       text-gray-300 hover:text-white">
+            {{ lbl }}
+          </span>
         </label>
-        <div class="text-sm text-gray-600 flex-1">
-          Any RGB value. Bypasses the scene palette - uses the controller's direct override API.
-          Solid colour only (no chases or effects).
+        {% endfor %}
+      </div>
+
+      {# ─── Preset panel ──────────────────────────────────────────────── #}
+      <div id="panel-preset" class="space-y-3"
+           style="display: {% if form.mode == 'preset' %}block{% else %}none{% endif %}">
+        <p class="text-sm text-gray-400">Pick one of the dashboard presets.</p>
+        {% set presets = [
+          ("#dc2626", "Red"), ("#f97316", "Orange"), ("#facc15", "Yellow"),
+          ("#84cc16", "Lime"), ("#22c55e", "Green"), ("#06b6d4", "Cyan"),
+          ("#3b82f6", "Blue"), ("#1e3a8a", "Evening blue"), ("#7c3aed", "Purple"),
+          ("#ec4899", "Pink"), ("#ffffff", "White"),
+        ] %}
+        <div class="grid grid-cols-3 sm:grid-cols-6 gap-3">
+          {% for hex, label in presets %}
+          <button type="button" data-hex="{{ hex }}"
+                  onclick="selectPreset(this)"
+                  class="preset-tile relative aspect-square rounded-xl p-3 text-left font-semibold text-sm
+                         ring-1 ring-white/10 shadow hover:ring-white/40 transition-all
+                         {% if form.mode == 'preset' and form.color_hex|lower == hex|lower %}!ring-4 !ring-blue-400{% endif %}"
+                  style="background-color: {{ hex }}; color: {{ hex | text_on }};">
+            <span class="text-[10px] uppercase tracking-wider opacity-80">{{ label }}</span>
+          </button>
+          {% endfor %}
         </div>
       </div>
+
+      {# ─── Effect panel ──────────────────────────────────────────────── #}
+      <div id="panel-effect" class="space-y-4"
+           style="display: {% if form.mode == 'effect' %}block{% else %}none{% endif %}">
+        <p class="text-sm text-gray-400">Schedule an animated effect. Stops automatically at end time.</p>
+
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <label>
+            <span class="text-[10px] uppercase tracking-[0.2em] text-gray-400">Effect</span>
+            <select name="effect_name" id="effect-name-select"
+                    onchange="updateEffectFields()"
+                    class="mt-1 w-full bg-gray-900/80 border border-white/20 rounded px-3 py-2 text-sm">
+              <option value="rainbow"   {% if form.effect_name == 'rainbow'   %}selected{% endif %}>Rainbow</option>
+              <option value="crossfade" {% if form.effect_name == 'crossfade' %}selected{% endif %}>Crossfade</option>
+              <option value="two_color" {% if form.effect_name == 'two_color' %}selected{% endif %}>Two colour</option>
+            </select>
+          </label>
+
+          <label>
+            <span class="text-[10px] uppercase tracking-[0.2em] text-gray-400">Mode</span>
+            <select name="effect_mode"
+                    class="mt-1 w-full bg-gray-900/80 border border-white/20 rounded px-3 py-2 text-sm">
+              <option value="together" {% if form.effect_mode == 'together' %}selected{% endif %}>Together</option>
+              <option value="chase"    {% if form.effect_mode == 'chase'    %}selected{% endif %}>Chase across spine</option>
+            </select>
+          </label>
+
+          <label>
+            <span class="text-[10px] uppercase tracking-[0.2em] text-gray-400">Speed</span>
+            <select name="effect_speed"
+                    class="mt-1 w-full bg-gray-900/80 border border-white/20 rounded px-3 py-2 text-sm">
+              <option value="slow"   {% if form.effect_speed == 'slow' %}selected{% endif %}>Slow</option>
+              <option value="medium" {% if form.effect_speed == 'medium' %}selected{% endif %}>Medium</option>
+              <option value="fast"   {% if form.effect_speed == 'fast' %}selected{% endif %}>Fast</option>
+            </select>
+          </label>
+
+          <label id="effect-palette-wrap">
+            <span class="text-[10px] uppercase tracking-[0.2em] text-gray-400">Palette</span>
+            <select name="effect_palette"
+                    class="mt-1 w-full bg-gray-900/80 border border-white/20 rounded px-3 py-2 text-sm">
+              {% for key in palettes.keys() %}
+              <option value="{{ key }}" {% if form.effect_palette == key %}selected{% endif %}>{{ key|title }}</option>
+              {% endfor %}
+            </select>
+          </label>
+        </div>
+
+        <div id="effect-twocolor-wrap" class="flex items-end gap-4">
+          <label>
+            <span class="text-[10px] uppercase tracking-[0.2em] text-gray-400">Colour A</span>
+            <input type="color" name="effect_color_a" value="{{ form.effect_color_a }}"
+                   class="mt-1 h-12 w-20 rounded border border-white/20 cursor-pointer bg-transparent">
+          </label>
+          <label>
+            <span class="text-[10px] uppercase tracking-[0.2em] text-gray-400">Colour B</span>
+            <input type="color" name="effect_color_b" value="{{ form.effect_color_b }}"
+                   class="mt-1 h-12 w-20 rounded border border-white/20 cursor-pointer bg-transparent">
+          </label>
+        </div>
+      </div>
+
+      {# ─── Custom panel ──────────────────────────────────────────────── #}
+      <div id="panel-custom"
+           style="display: {% if form.mode == 'custom' %}block{% else %}none{% endif %}">
+        <p class="text-sm text-gray-400 mb-3">Pick any colour from the wheel.</p>
+        <div class="flex flex-col sm:flex-row items-start gap-6">
+          <div id="color-wheel" class="select-none"></div>
+          <div class="flex flex-col gap-3 mt-2">
+            <div class="flex items-center gap-3">
+              <div id="color-preview" class="h-12 w-12 rounded-full ring-2 ring-white/30 shadow-lg shrink-0"
+                   style="background-color: {{ form.color_hex }};"></div>
+              <input id="color-hex-text" readonly value="{{ form.color_hex|upper }}"
+                     class="bg-transparent text-lg font-mono tracking-widest text-gray-100 focus:outline-none">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {# Hidden — current colour value, set by Preset or Custom panel. #}
+      <input type="hidden" name="color_hex" id="color-hex-input" value="{{ form.color_hex }}">
     </div>
-  </fieldset>
 
-  <label class="block">
-    <span class="text-sm text-gray-700">Notes (optional)</span>
-    <textarea name="notes" rows="2"
-              class="mt-1 block w-full rounded border border-gray-300 px-3 py-2">{{ form.notes }}</textarea>
-  </label>
+    <label class="block">
+      <span class="text-[10px] uppercase tracking-[0.2em] text-gray-400">Notes (optional)</span>
+      <textarea name="notes" rows="2"
+                class="mt-1 block w-full rounded-lg bg-gray-900/80 border border-white/20 px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500">{{ form.notes }}</textarea>
+    </label>
 
-  <div id="preview" class="rounded-lg p-4 transition-colors duration-300"
-       style="background-color: #f3f4f6; color: #6b7280;">
-    Pick something to preview the colour.
-  </div>
+    <div class="flex items-center justify-end gap-3">
+      <a href="/overrides" class="text-sm text-gray-400 hover:text-gray-200">Cancel</a>
+      <button type="submit"
+              class="px-5 py-2.5 bg-blue-500 hover:bg-blue-400 text-white rounded-xl font-semibold text-sm shadow-lg shadow-blue-500/30">
+        Save override
+      </button>
+    </div>
+  </form>
+</div>
 
-  <div class="flex items-center justify-between">
-    <a href="/overrides" class="text-sm text-gray-600 hover:text-gray-900">Cancel</a>
-    <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-medium">Save override</button>
-  </div>
-</form>
-
+<script src="https://cdn.jsdelivr.net/npm/@jaames/iro@5/dist/iro.min.js"></script>
 <script>
-  (function() {
-    function luminance(hex) {
-      const h = hex.replace('#', '');
-      const r = parseInt(h.slice(0, 2), 16);
-      const g = parseInt(h.slice(2, 4), 16);
-      const b = parseInt(h.slice(4, 6), 16);
-      return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-    }
-    const sceneSel = document.getElementById('scene-select');
-    const colorInput = document.getElementById('color-input');
-    const preview = document.getElementById('preview');
-    const sceneFields = document.getElementById('mode-scene-fields');
-    const colorFields = document.getElementById('mode-color-fields');
+  // ── Mode panel toggle ──────────────────────────────────────────────
+  function setMode(m) {
+    document.getElementById('panel-preset').style.display = m === 'preset' ? 'block' : 'none';
+    document.getElementById('panel-effect').style.display = m === 'effect' ? 'block' : 'none';
+    document.getElementById('panel-custom').style.display = m === 'custom' ? 'block' : 'none';
+  }
 
-    function setPreview(swatch, label) {
-      preview.style.backgroundColor = swatch;
-      preview.style.color = luminance(swatch) > 0.6 ? '#000' : '#fff';
-      preview.textContent = label;
-    }
+  // ── Preset tile selection ──────────────────────────────────────────
+  function selectPreset(btn) {
+    document.querySelectorAll('.preset-tile').forEach(t => {
+      t.classList.remove('!ring-4', '!ring-blue-400');
+    });
+    btn.classList.add('!ring-4', '!ring-blue-400');
+    const hex = btn.dataset.hex;
+    document.getElementById('color-hex-input').value = hex;
+    // Mirror to the custom wheel + preview so they stay in sync.
+    if (window.__wheel) window.__wheel.color.hexString = hex;
+  }
 
-    function updateMode() {
-      const mode = document.querySelector('input[name="mode"]:checked').value;
-      if (mode === 'color') {
-        sceneFields.classList.add('hidden');
-        colorFields.classList.remove('hidden');
-        setPreview(colorInput.value, 'Custom colour ' + colorInput.value.toUpperCase());
-      } else {
-        colorFields.classList.add('hidden');
-        sceneFields.classList.remove('hidden');
-        const opt = sceneSel.options[sceneSel.selectedIndex];
-        const sw = opt ? opt.getAttribute('data-swatch') : null;
-        if (sw) {
-          setPreview(sw, opt.getAttribute('data-name') + ' - preview');
-        } else {
-          preview.style.backgroundColor = '#f3f4f6';
-          preview.style.color = '#6b7280';
-          preview.textContent = 'Pick a scene to preview the colour.';
-        }
-      }
-    }
+  // ── Effect-form contextual fields ──────────────────────────────────
+  function updateEffectFields() {
+    const eff = document.getElementById('effect-name-select').value;
+    document.getElementById('effect-palette-wrap').style.display   = eff === 'crossfade' ? '' : 'none';
+    document.getElementById('effect-twocolor-wrap').style.display  = eff === 'two_color' ? '' : 'none';
+  }
+  updateEffectFields();
 
-    window.updateMode = updateMode;
-    sceneSel.addEventListener('change', updateMode);
-    colorInput.addEventListener('input', updateMode);
-    updateMode();
+  // ── iro.js wheel for Custom tab ────────────────────────────────────
+  (function () {
+    if (!window.iro) return;
+    const wheel = new iro.ColorPicker('#color-wheel', {
+      width: 200,
+      color: document.getElementById('color-hex-input').value || '#3b82f6',
+      borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+      layout: [
+        { component: iro.ui.Wheel },
+        { component: iro.ui.Slider, options: { sliderType: 'value' } }
+      ]
+    });
+    window.__wheel = wheel;
+    const hexInput = document.getElementById('color-hex-input');
+    const hexText = document.getElementById('color-hex-text');
+    const preview = document.getElementById('color-preview');
+    wheel.on('color:change', function (c) {
+      hexInput.value = c.hexString;
+      hexText.value = c.hexString.toUpperCase();
+      preview.style.backgroundColor = c.hexString;
+    });
   })();
 </script>
 {% endblock %}

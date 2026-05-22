@@ -65,11 +65,11 @@ async def lifespan(app: FastAPI):
     tpc = _build_tpc_client()
     app.state.tpc = tpc
 
-    logger.info("Starting scheduler")
-    scheduler_mod.init(tpc)
-
     logger.info("Starting effect engine")
     app.state.effect_engine = EffectEngine(tpc)
+
+    logger.info("Starting scheduler")
+    scheduler_mod.init(tpc, app.state.effect_engine)
 
     try:
         yield

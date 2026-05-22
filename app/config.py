@@ -27,9 +27,11 @@ class Settings(BaseSettings):
     # request as this username. Use only on a trusted LAN where Caddy's
     # @not_lan block enforces who can reach the box.
     app_auto_login_as: str = Field(default="")
-    # Hour:minute (24h) at which the project's daily "release all" fires.
-    # Overrides default to one minute after this and validation can warn for
-    # any scheduled override starting before it.
+    # The .pd2 project's daily schedule runs between these times. Overrides
+    # whose start_at falls inside this window are rejected — anything in
+    # [start, release] would be wiped out when the release trigger fires.
+    daily_start_hour: int = Field(default=6)
+    daily_start_minute: int = Field(default=0)
     daily_release_hour: int = Field(default=18)
     daily_release_minute: int = Field(default=0)
 

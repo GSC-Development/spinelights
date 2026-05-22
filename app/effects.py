@@ -166,21 +166,29 @@ class EffectEngine:
                 self.current = None
 
 
-def _build_active(name: str, params: dict) -> ActiveEffect:
-    now = datetime.now(timezone.utc)
+def describe_effect(name: str, params: dict) -> tuple[str, str]:
+    """Return (representative_swatch_hex, display_label) for an effect spec.
+
+    Used both for live effect status (ActiveEffect.swatch/label) and for
+    scheduled overrides that fire effects (Override.swatch / display label).
+    """
     chase = " (chase)" if params.get("chase") else ""
     if name == "rainbow":
-        return ActiveEffect(name, params, now, "#ec4899", f"Rainbow{chase}")
+        return ("#ec4899", f"Rainbow{chase}")
     if name == "crossfade":
         pal_name = params.get("palette", "rainbow")
         pal = PALETTES.get(pal_name, PALETTES["rainbow"])
-        return ActiveEffect(name, params, now, pal[0], f"Crossfade — {pal_name}{chase}")
+        return (pal[0], f"Crossfade — {pal_name}{chase}")
     if name == "two_color":
         a = params.get("color_a", "#dc2626")
         b = params.get("color_b", "#22c55e")
-        return ActiveEffect(name, params, now, a,
-                            f"Two colour{chase} — {a.upper()} / {b.upper()}")
-    return ActiveEffect(name, params, now, "#7c3aed", name.title())
+        return (a, f"Two colour{chase} — {a.upper()} / {b.upper()}")
+    return ("#7c3aed", name.title())
+
+
+def _build_active(name: str, params: dict) -> ActiveEffect:
+    sw, lbl = describe_effect(name, params)
+    return ActiveEffect(name, params, datetime.now(timezone.utc), sw, lbl)
 
 
 # ---------------------------------------------------------------------------

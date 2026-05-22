@@ -8,12 +8,14 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, time, timezone
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
 from app import scheduler as scheduler_mod
+from app.config import get_settings
 from app.models import (
     AuditAction,
     AuditLog,
@@ -75,9 +77,11 @@ def create_override(
     end_at: datetime,
     scene_id: str | None = None,
     color_hex: str | None = None,
+    effect_name: str | None = None,
+    effect_params: dict | None = None,
     notes: str | None = None,
 ) -> Override:
-    """Create an override. Exactly one of scene_id or color_hex must be set."""
+    """Create an override. Exactly one of (scene_id, color_hex, effect_name) must be set."""
     start_at = _to_utc(start_at)
     end_at = _to_utc(end_at)
     now = datetime.now(timezone.utc)
@@ -89,11 +93,30 @@ def create_override(
     if start_at <= now:
         raise OverrideValidationError("start time must be in the future")
 
-    if bool(scene_id) == bool(color_hex):
-        raise OverrideValidationError("pick a scene OR a custom colour, not both/neither")
+    # Reject anything inside the daily-schedule window. The release trigger
+    # fires at daily_release time and would wipe out any active override.
+    settings = get_settings()
+    local_start = start_at.astimezone(ZoneInfo(settings.app_timezone)).time()
+    schedule_start = time(settings.daily_start_hour, settings.daily_start_minute)
+    schedule_end = time(settings.daily_release_hour, settings.daily_release_minute)
+    if schedule_start <= local_start <= schedule_end:
+        raise OverrideValidationError(
+            f"overrides must start outside the daily schedule "
+            f"({schedule_start.strftime('%H:%M')}–{schedule_end.strftime('%H:%M')}). "
+            f"Earliest allowed start: {settings.daily_release_hour:02d}:"
+            f"{settings.daily_release_minute + 1:02d}."
+        )
+
+    selected = sum(bool(x) for x in (scene_id, color_hex, effect_name))
+    if selected != 1:
+        raise OverrideValidationError(
+            "pick exactly one of: scene, custom colour, or effect"
+        )
 
     scene = None
     color_to_store = None
+    effect_to_store = None
+    effect_params_json: str | None = None
     detail_target = ""
 
     if scene_id:
@@ -101,8 +124,7 @@ def create_override(
         if scene is None or not scene.enabled:
             raise OverrideValidationError("scene not found or disabled")
         detail_target = f"scene={scene.key}"
-    else:
-        # Validate hex shape
+    elif color_hex:
         try:
             ch = (color_hex or "").strip().lower()
             if not (ch.startswith("#") and len(ch) == 7):
@@ -112,6 +134,16 @@ def create_override(
         except ValueError as e:
             raise OverrideValidationError("colour must be a 7-char hex like #ff8800") from e
         detail_target = f"color={color_to_store}"
+    else:
+        # Effect path. Validate the name and serialise params.
+        from app.effects import _RUNNERS  # avoid top-level cycle
+        import json as _json
+        en = effect_name.strip().lower()
+        if en not in _RUNNERS:
+            raise OverrideValidationError(f"unknown effect: {effect_name}")
+        effect_to_store = en
+        effect_params_json = _json.dumps(effect_params or {})
+        detail_target = f"effect={en} params={effect_params_json}"
 
     override = Override(
         name=name.strip(),
@@ -119,6 +151,8 @@ def create_override(
         end_at=end_at,
         scene_id=(scene.id if scene is not None else None),
         color_hex=color_to_store,
+        effect_name=effect_to_store,
+        effect_params_json=effect_params_json,
         status=OverrideStatus.SCHEDULED,
         created_by_id=creator.id,
         notes=(notes or None),
@@ -147,8 +181,9 @@ def cancel_override(
     override: Override,
     actor: User,
     tpc: TPCClient,
+    effect_engine=None,
 ) -> None:
-    """Cancel an override. If currently active, fire its release trigger now."""
+    """Cancel an override. If currently active, release / clear / stop now."""
     if override.status in {OverrideStatus.COMPLETED, OverrideStatus.CANCELLED}:
         return
 
@@ -170,7 +205,10 @@ def cancel_override(
 
     if was_active:
         try:
-            if override.is_custom_colour:
+            if override.is_effect:
+                if effect_engine is not None:
+                    effect_engine.stop()
+            elif override.is_custom_colour:
                 tpc.clear_overrides(fade_seconds=1.0)
             elif override.scene is not None:
                 tpc.fire_trigger(override.scene.release_trigger_num)
