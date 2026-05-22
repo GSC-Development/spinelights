@@ -1,0 +1,38 @@
+[Unit]
+Description=Pharos Overrides Scheduler
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pharos
+Group=pharos
+WorkingDirectory=/opt/pharos-scheduler
+EnvironmentFile=/etc/pharos-scheduler/env
+ExecStart=/opt/pharos-scheduler/.venv/bin/uvicorn app.main:app \
+  --host 127.0.0.1 --port 8000 \
+  --log-level info \
+  --proxy-headers --forwarded-allow-ips=127.0.0.1
+Restart=on-failure
+RestartSec=5
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/pharos-scheduler
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+LockPersonality=true
+MemoryDenyWriteExecute=true
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=pharos-scheduler
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,23 @@
+{# Toast fragment swapped into #toast after a control action. Auto-dismisses. #}
+<div role="status"
+     class="pointer-events-auto rounded-lg px-4 py-3 shadow-lg flex items-center gap-3 min-w-[240px] max-w-sm
+            {{ 'bg-red-600 text-white' if not ok else '' }}"
+     {% if ok and swatch %}style="background-color: {{ swatch }}; color: {{ swatch | text_on }};"{% endif %}
+     >
+  {% if ok %}
+    <span class="text-xs uppercase tracking-wider opacity-80">Fired</span>
+    <span class="font-semibold">{{ message }}</span>
+  {% else %}
+    <span class="text-xs font-medium uppercase tracking-wider opacity-90">Error</span>
+    <span class="text-sm">{{ message }}</span>
+  {% endif %}
+</div>
+<script>
+  // Auto-dismiss the toast after 3.5s. Clears prior timers so rapid clicks don't pile up.
+  (function () {
+    const el = document.getElementById('toast');
+    if (!el) return;
+    if (window.__toastTimer) clearTimeout(window.__toastTimer);
+    window.__toastTimer = setTimeout(() => { el.innerHTML = ''; }, 3500);
+  })();
+</script>

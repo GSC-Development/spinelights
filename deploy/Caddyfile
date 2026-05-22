@@ -1,0 +1,33 @@
+# Drop in /etc/caddy/Caddyfile (or use sites-enabled if you've split it).
+#
+# This config:
+#   * Terminates HTTPS at Caddy (auto-TLS via your venue's internal CA, or
+#     self-signed for a quick start). Replace `lighting.internal.gsc.local`
+#     with whatever hostname resolves on your VLAN.
+#   * Proxies to the local uvicorn on 127.0.0.1:8000.
+#   * Logs to journald via Caddy's default systemd-journal output.
+#
+# For internal-only TLS (no public DNS), use Caddy's `tls internal` so it
+# issues from its own CA. Your devices will need to trust /var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt
+# (or distribute it via MDM).
+
+lighting.internal.gsc.local {
+    encode zstd gzip
+    tls internal
+
+    # Block requests that aren't from the venue LAN. Adjust subnet to suit.
+    @not_lan {
+        not remote_ip 192.168.0.0/16 10.0.0.0/8 127.0.0.1/32
+    }
+    respond @not_lan "Not from this network" 403
+
+    reverse_proxy 127.0.0.1:8000 {
+        header_up X-Forwarded-Proto {scheme}
+        header_up X-Real-IP {remote_host}
+    }
+
+    log {
+        output stdout
+        format console
+    }
+}

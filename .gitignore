@@ -1,0 +1,33 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# venv
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# secrets + runtime state
+.env
+.env.local
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+cookies.txt
+
+# build
+build/
+dist/
+*.egg-info/
+
+# logs
+*.log

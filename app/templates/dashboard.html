@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% block title %}Controller - Pharos Scheduler{% endblock %}
+{% block content %}
+
+<div class="bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 text-gray-100
+            -mx-4 -my-4 sm:rounded-3xl px-4 sm:px-8 py-6 sm:py-8
+            min-h-[calc(100vh-4rem)] shadow-2xl shadow-black/40">
+
+  {% include "_dashboard_panel.html" %}
+
+  <div class="grid lg:grid-cols-5 gap-6 mb-8">
+
+    {# ─── Preset colours (primary action) ─────────────────────────────── #}
+    <section class="lg:col-span-3">
+      <div class="flex items-baseline justify-between mb-4">
+        <h2 class="text-2xl font-bold tracking-tight">Presets</h2>
+        <span class="text-[10px] uppercase tracking-[0.2em] text-gray-500">Fires immediately</span>
+      </div>
+
+      {% set presets = [
+        ("#dc2626", "Red"),
+        ("#f97316", "Orange"),
+        ("#facc15", "Yellow"),
+        ("#84cc16", "Lime"),
+        ("#22c55e", "Green"),
+        ("#06b6d4", "Cyan"),
+        ("#3b82f6", "Blue"),
+        ("#1e3a8a", "Evening blue"),
+        ("#7c3aed", "Purple"),
+        ("#ec4899", "Pink"),
+        ("#ffffff", "White"),
+      ] %}
+
+      <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
+
+        {# All Off — first tile, same square shape as presets for continuity. #}
+        <button
+          hx-post="/controls/release"
+          hx-target="#toast"
+          hx-swap="innerHTML"
+          hx-confirm="Release all scenes and timelines now?"
+          class="group relative aspect-square rounded-2xl p-5 flex flex-col items-center justify-center gap-2
+                 font-semibold text-lg text-gray-100
+                 bg-gradient-to-br from-gray-900 to-black
+                 ring-1 ring-white/20 shadow-lg
+                 hover:ring-white/50 hover:shadow-2xl hover:-translate-y-1
+                 active:translate-y-0 active:scale-[0.98]
+                 transition-all duration-200
+                 focus:outline-none focus:ring-4 focus:ring-red-400/60 overflow-hidden"
+          title="Release all scenes and timelines (trigger 4)">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+               stroke-width="1.8" stroke="currentColor"
+               class="w-12 h-12 sm:w-14 sm:h-14 opacity-90 group-hover:opacity-100 transition-opacity">
+            <path stroke-linecap="round" stroke-linejoin="round"
+                  d="M5.636 5.636a9 9 0 1 0 12.728 0M12 3v9" />
+          </svg>
+          <span class="text-xs sm:text-sm uppercase tracking-[0.25em] opacity-80 group-hover:opacity-100">All off</span>
+        </button>
+
+        {% for hex, name in presets %}
+        <button
+          hx-post="/controls/color"
+          hx-vals='{"color": "{{ hex }}"}'
+          hx-target="#toast"
+          hx-swap="innerHTML"
+          class="group relative aspect-square rounded-2xl p-5 text-left font-semibold text-lg
+                 ring-1 ring-white/10 shadow-lg
+                 hover:ring-white/40 hover:shadow-2xl hover:-translate-y-1
+                 active:translate-y-0 active:scale-[0.98]
+                 transition-all duration-200
+                 focus:outline-none focus:ring-4 focus:ring-blue-400/60 overflow-hidden"
+          style="background-color: {{ hex }}; color: {{ hex | text_on }};"
+          title="{{ name }} ({{ hex }})">
+          <span aria-hidden="true"
+                class="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/15 to-transparent opacity-60 group-hover:opacity-80 transition-opacity"></span>
+          <span class="relative block text-base sm:text-xl drop-shadow-sm">{{ name }}</span>
+          <span class="relative absolute bottom-3 right-4 text-2xl leading-none opacity-50 group-hover:opacity-90 group-hover:translate-x-1 transition-all">›</span>
+        </button>
+        {% endfor %}
+      </div>
+    </section>
+
+    {# ─── Custom colour wheel ─────────────────────────────────────────── #}
+    <aside class="lg:col-span-2">
+      <div class="flex items-baseline justify-between mb-4">
+        <h2 class="text-2xl font-bold tracking-tight">Custom colour</h2>
+        <span class="text-[10px] uppercase tracking-[0.2em] text-gray-500">Any RGB</span>
+      </div>
+
+      <div class="bg-white/[0.04] ring-1 ring-white/10 rounded-2xl p-6 backdrop-blur-sm">
+        <form hx-post="/controls/color" hx-target="#toast" hx-swap="innerHTML"
+              class="flex flex-col items-center gap-5">
+
+          <div id="color-wheel" class="select-none"></div>
+
+          <div class="flex items-center gap-3 w-full">
+            <div id="color-preview"
+                 class="h-12 w-12 rounded-full ring-2 ring-white/30 shadow-lg shrink-0 transition-colors"
+                 style="background-color: #ff8800;"></div>
+            <input id="color-hex-text" readonly value="#FF8800"
+                   class="flex-1 bg-transparent text-xl font-mono tracking-widest text-gray-100 focus:outline-none"
+                   aria-label="Selected hex colour">
+            <button type="submit"
+                    class="px-5 py-3 bg-blue-500 hover:bg-blue-400 text-white rounded-xl font-semibold text-sm
+                           shadow-lg shadow-blue-500/30 hover:shadow-blue-400/40 transition-all
+                           focus:outline-none focus:ring-4 focus:ring-blue-300/60">
+              Apply
+            </button>
+          </div>
+
+          <input type="hidden" name="color" id="color-hex-input" value="#ff8800">
+        </form>
+      </div>
+    </aside>
+  </div>
+
+  {# ─── Next up strip ───────────────────────────────────────────────────── #}
+  <section>
+    <div class="flex items-baseline justify-between mb-4">
+      <h2 class="text-2xl font-bold tracking-tight">Next up</h2>
+      <a href="/overrides" class="text-sm text-blue-400 hover:text-blue-300">Manage →</a>
+    </div>
+
+    {% if next_up %}
+    <div class="grid sm:grid-cols-3 gap-3">
+      {% for ov in next_up %}
+      <div class="bg-white/[0.04] ring-1 ring-white/10 rounded-xl p-4 flex items-start gap-3 hover:bg-white/[0.07] transition-colors">
+        <span class="inline-block w-4 h-4 rounded-full mt-1 shrink-0 ring-2 ring-white/20 shadow-md"
+              style="background-color: {{ ov.swatch }};"></span>
+        <div class="min-w-0 flex-1">
+          <div class="text-sm font-semibold truncate text-gray-100">{{ ov.name }}</div>
+          <div class="text-xs text-gray-400 mt-0.5">
+            {{ ov.start_at.astimezone(local_tz).strftime("%a %d %b %H:%M") }}
+            – {{ ov.end_at.astimezone(local_tz).strftime("%H:%M") }}
+          </div>
+          <div class="text-[11px] text-gray-500 mt-1 uppercase tracking-wider">{{ ov.display_scene_label }}</div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="bg-white/[0.04] ring-1 ring-white/10 rounded-xl p-6 text-sm text-gray-400 text-center">
+      No scheduled overrides.
+      <a href="/overrides/new" class="ml-2 text-blue-400 hover:text-blue-300">Add one →</a>
+    </div>
+    {% endif %}
+  </section>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@jaames/iro@5/dist/iro.min.js"></script>
+<script>
+  (function () {
+    if (!window.iro) {
+      console.warn("iro.js failed to load — falling back to native picker");
+      return;
+    }
+    const wheel = new iro.ColorPicker('#color-wheel', {
+      width: 220,
+      color: '#ff8800',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.15)',
+      layout: [
+        { component: iro.ui.Wheel },
+        { component: iro.ui.Slider, options: { sliderType: 'value' } }
+      ]
+    });
+    const hexInput = document.getElementById('color-hex-input');
+    const hexText = document.getElementById('color-hex-text');
+    const preview = document.getElementById('color-preview');
+    wheel.on('color:change', function (c) {
+      hexInput.value = c.hexString;
+      hexText.value = c.hexString.toUpperCase();
+      preview.style.backgroundColor = c.hexString;
+    });
+  })();
+</script>
+
+{% endblock %}

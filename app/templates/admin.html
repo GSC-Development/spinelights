@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% block title %}Admin{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-semibold mb-6">Admin</h1>
+
+<section class="bg-white border border-gray-200 rounded-xl p-5 mb-6">
+  <h2 class="font-semibold mb-3">Users</h2>
+  <table class="w-full text-sm mb-4">
+    <thead class="text-left text-gray-500"><tr>
+      <th class="py-2 pr-4">Username</th>
+      <th class="py-2 pr-4">Display name</th>
+      <th class="py-2 pr-4">Role</th>
+      <th class="py-2 pr-4">Enabled</th>
+      <th class="py-2 pr-4">Last login</th>
+      <th class="py-2 pr-4"></th>
+    </tr></thead>
+    <tbody class="divide-y divide-gray-100">
+      {% for u in users %}
+      <tr>
+        <td class="py-2 pr-4 font-medium">{{ u.username }}</td>
+        <td class="py-2 pr-4">{{ u.display_name or "" }}</td>
+        <td class="py-2 pr-4">{{ u.role.value }}</td>
+        <td class="py-2 pr-4">{{ "Yes" if u.enabled else "No" }}</td>
+        <td class="py-2 pr-4 text-gray-600">{{ u.last_login_at.strftime("%d %b %H:%M") if u.last_login_at else "-" }}</td>
+        <td class="py-2 pr-4 text-right">
+          {% if u.id != user.id and u.enabled %}
+          <form method="post" action="/admin/users/{{ u.id }}/disable" onsubmit="return confirm('Disable this user?');">
+            <button class="text-red-600 hover:text-red-800 text-sm">Disable</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <form method="post" action="/admin/users/new" class="grid grid-cols-1 md:grid-cols-5 gap-2 items-end mt-4 pt-4 border-t border-gray-100">
+    <label class="block">
+      <span class="text-xs text-gray-500">Username</span>
+      <input name="username" required class="mt-1 block w-full rounded border border-gray-300 px-2 py-1 text-sm">
+    </label>
+    <label class="block">
+      <span class="text-xs text-gray-500">Password</span>
+      <input name="password" required type="password" class="mt-1 block w-full rounded border border-gray-300 px-2 py-1 text-sm">
+    </label>
+    <label class="block">
+      <span class="text-xs text-gray-500">Display name</span>
+      <input name="display_name" class="mt-1 block w-full rounded border border-gray-300 px-2 py-1 text-sm">
+    </label>
+    <label class="block">
+      <span class="text-xs text-gray-500">Role</span>
+      <select name="role" class="mt-1 block w-full rounded border border-gray-300 px-2 py-1 text-sm bg-white">
+        <option value="operator">operator</option>
+        <option value="admin">admin</option>
+      </select>
+    </label>
+    <button class="bg-blue-600 hover:bg-blue-700 text-white text-sm rounded px-3 py-1.5">Add user</button>
+  </form>
+</section>
+
+<section class="bg-white border border-gray-200 rounded-xl p-5 mb-6">
+  <h2 class="font-semibold mb-3">Scenes (palette)</h2>
+  <p class="text-sm text-gray-500 mb-3">Curated list of effects operators can choose from. Each maps to a Pharos trigger number on the loaded project. <strong>If the .pd2 is re-uploaded and trigger numbers change, re-check these.</strong></p>
+  <table class="w-full text-sm mb-4">
+    <thead class="text-left text-gray-500"><tr>
+      <th class="py-2 pr-4">Swatch</th>
+      <th class="py-2 pr-4">Key</th>
+      <th class="py-2 pr-4">Display</th>
+      <th class="py-2 pr-4">Trigger</th>
+      <th class="py-2 pr-4">Release</th>
+      <th class="py-2 pr-4">Enabled</th>
+      <th class="py-2 pr-4"></th>
+    </tr></thead>
+    <tbody class="divide-y divide-gray-100">
+      {% for s in scenes %}
+      <tr>
+        <td class="py-2 pr-4"><span class="inline-block w-6 h-6 rounded border border-gray-300" style="background-color: {{ s.swatch }};"></span></td>
+        <td class="py-2 pr-4 font-mono text-xs">{{ s.key }}</td>
+        <td class="py-2 pr-4">{{ s.display_name }}</td>
+        <td class="py-2 pr-4">{{ s.trigger_num }}</td>
+        <td class="py-2 pr-4">{{ s.release_trigger_num }}</td>
+        <td class="py-2 pr-4">{{ "Yes" if s.enabled else "No" }}</td>
+        <td class="py-2 pr-4 text-right">
+          {% if s.enabled %}
+          <form method="post" action="/admin/scenes/{{ s.id }}/disable">
+            <button class="text-red-600 hover:text-red-800 text-sm">Disable</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <form method="post" action="/admin/scenes/new" class="grid grid-cols-1 md:grid-cols-6 gap-2 items-end mt-4 pt-4 border-t border-gray-100">
+    <label class="block">
+      <span class="text-xs text-gray-500">Key</span>
+      <input name="key" required class="mt-1 block w-full rounded border border-gray-300 px-2 py-1 text-sm">
+    </label>
+    <label class="block">
+      <span class="text-xs text-gray-500">Display name</span>
+      <input name="display_name" required class="mt-1 block w-full rounded border border-gray-300 px-2 py-1 text-sm">
+    </label>
+    <label class="block">
+      <span class="text-xs text-gray-500">Swatch</span>
+      <input name="swatch" type="color" required value="#3b82f6" class="mt-1 block w-full h-8 rounded border border-gray-300">
+    </label>
+    <label class="block">
+      <span class="text-xs text-gray-500">Trigger #</span>
+      <input name="trigger_num" type="number" min="0" required class="mt-1 block w-full rounded border border-gray-300 px-2 py-1 text-sm">
+    </label>
+    <label class="block">
+      <span class="text-xs text-gray-500">Release #</span>
+      <input name="release_trigger_num" type="number" min="0" required value="4" class="mt-1 block w-full rounded border border-gray-300 px-2 py-1 text-sm">
+    </label>
+    <button class="bg-blue-600 hover:bg-blue-700 text-white text-sm rounded px-3 py-1.5">Add scene</button>
+  </form>
+</section>
+
+<section class="bg-white border border-gray-200 rounded-xl p-5 mb-6">
+  <h2 class="font-semibold mb-3">Daily timeline mappings</h2>
+  <p class="text-sm text-gray-500 mb-3">Tell the dashboard what colour to show when the daily schedule (not an override) is driving the lights. Get the timeline/scene number from the TPC project.</p>
+  <table class="w-full text-sm mb-4">
+    <thead class="text-left text-gray-500"><tr>
+      <th class="py-2 pr-4">Source</th>
+      <th class="py-2 pr-4">Num</th>
+      <th class="py-2 pr-4">Display</th>
+      <th class="py-2 pr-4">Swatch</th>
+    </tr></thead>
+    <tbody class="divide-y divide-gray-100">
+      {% for d in dailies %}
+      <tr>
+        <td class="py-2 pr-4">{{ d.source }}</td>
+        <td class="py-2 pr-4">{{ d.num }}</td>
+        <td class="py-2 pr-4">{{ d.display_name }}</td>
+        <td class="py-2 pr-4"><span class="inline-block w-6 h-6 rounded border border-gray-300" style="background-color: {{ d.swatch }};"></span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <form method="post" action="/admin/dailies/upsert" class="grid grid-cols-1 md:grid-cols-5 gap-2 items-end mt-4 pt-4 border-t border-gray-100">
+    <label class="block">
+      <span class="text-xs text-gray-500">Source</span>
+      <select name="source" class="mt-1 block w-full rounded border border-gray-300 px-2 py-1 text-sm bg-white">
+        <option value="timeline">timeline</option>
+        <option value="scene">scene</option>
+      </select>
+    </label>
+    <label class="block">
+      <span class="text-xs text-gray-500">Num</span>
+      <input name="num" type="number" min="0" required class="mt-1 block w-full rounded border border-gray-300 px-2 py-1 text-sm">
+    </label>
+    <label class="block">
+      <span class="text-xs text-gray-500">Display name</span>
+      <input name="display_name" required class="mt-1 block w-full rounded border border-gray-300 px-2 py-1 text-sm">
+    </label>
+    <label class="block">
+      <span class="text-xs text-gray-500">Swatch</span>
+      <input name="swatch" type="color" required value="#1d4ed8" class="mt-1 block w-full h-8 rounded border border-gray-300">
+    </label>
+    <button class="bg-blue-600 hover:bg-blue-700 text-white text-sm rounded px-3 py-1.5">Save mapping</button>
+  </form>
+</section>
+
+<section class="bg-white border border-gray-200 rounded-xl p-5">
+  <h2 class="font-semibold mb-3">Audit log (most recent 100)</h2>
+  <table class="w-full text-sm">
+    <thead class="text-left text-gray-500"><tr>
+      <th class="py-2 pr-4">When</th>
+      <th class="py-2 pr-4">Actor</th>
+      <th class="py-2 pr-4">Action</th>
+      <th class="py-2 pr-4">Target</th>
+      <th class="py-2 pr-4">Detail</th>
+    </tr></thead>
+    <tbody class="divide-y divide-gray-100 text-gray-700">
+      {% for a in audit %}
+      <tr>
+        <td class="py-2 pr-4 text-gray-500 whitespace-nowrap">{{ a.at.strftime("%d %b %H:%M:%S") }}</td>
+        <td class="py-2 pr-4">{{ a.actor_username or "-" }}</td>
+        <td class="py-2 pr-4 font-mono text-xs">{{ a.action.value }}</td>
+        <td class="py-2 pr-4 text-xs text-gray-500">{{ a.target_type or "" }} {{ a.target_id[:8] if a.target_id else "" }}</td>
+        <td class="py-2 pr-4 text-xs">{{ a.detail or "" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

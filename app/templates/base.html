@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Pharos Scheduler{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/htmx.org@2.0.3"></script>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  </style>
+</head>
+<body class="min-h-screen bg-gray-50 text-gray-900">
+  {% if user %}
+  <nav class="bg-white border-b border-gray-200 shadow-sm">
+    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-6">
+        <a href="/dashboard" class="font-semibold text-lg">Pharos Scheduler</a>
+        <a href="/dashboard" class="text-sm text-gray-600 hover:text-gray-900">Controller</a>
+        <a href="/overrides" class="text-sm text-gray-600 hover:text-gray-900">Overrides</a>
+      </div>
+    </div>
+  </nav>
+  {% endif %}
+  <main class="max-w-6xl mx-auto p-4">
+    {% block content %}{% endblock %}
+  </main>
+
+  {# Toast anchor — control actions HTMX-swap their confirmation here. #}
+  <div id="toast" class="fixed bottom-6 right-6 z-50 pointer-events-none"></div>
+</body>
+</html>

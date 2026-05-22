@@ -1,0 +1,26 @@
+{# Polled live-state panel — dominant element on the dashboard. #}
+<section id="dashboard-panel"
+     hx-get="/dashboard/poll"
+     hx-trigger="every 5s"
+     hx-swap="outerHTML"
+     style="background-color: {{ bg_color }}; color: {{ bg_color | text_on }};"
+     class="relative rounded-2xl p-8 sm:p-10 min-h-[40vh] flex flex-col justify-center shadow-sm transition-colors duration-500 mb-8">
+
+  <div class="text-xs sm:text-sm font-medium uppercase tracking-widest opacity-70 mb-3">
+    {{ chip }}
+  </div>
+  <div class="text-3xl sm:text-5xl font-semibold leading-tight break-words">
+    {{ bg_label }}
+  </div>
+
+  {% if state.active_override %}
+  <div class="text-sm sm:text-base opacity-80 mt-4">
+    Created by {{ state.active_override.creator.username }} —
+    ends {{ state.active_override.end_at.astimezone(local_tz).strftime("%H:%M on %d %b") }}
+  </div>
+  {% elif not state.tpc_reachable %}
+  <div class="text-sm sm:text-base opacity-80 mt-4">
+    Cannot reach the controller. Scheduled overrides may not fire.
+  </div>
+  {% endif %}
+</section>
