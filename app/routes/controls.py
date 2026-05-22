@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import require_user
 from app.db import get_db
+from app.effects import NUM_FIXTURES
 from app.models import AuditAction, AuditLog, Scene, User
 from app.tpc import TPCError
 
@@ -54,6 +55,7 @@ def fire_scene(
         raise HTTPException(status_code=404, detail="scene not found")
 
     tpc = request.app.state.tpc
+    request.app.state.effect_engine.stop()
     try:
         tpc.fire_trigger(scene.trigger_num)
     except TPCError as e:
@@ -93,10 +95,11 @@ def fire_release(
     Doing both means the building returns to the daily schedule whether it was
     coloured by a direct picker call or by a scene trigger."""
     tpc = request.app.state.tpc
+    request.app.state.effect_engine.stop()
     errors: list[str] = []
 
     try:
-        tpc.clear_overrides(fade_seconds=1.0)
+        tpc.clear_overrides(fade_seconds=1.0, num_fixtures=NUM_FIXTURES)
     except TPCError as e:
         errors.append(f"clear overrides failed: {e}")
 
@@ -147,6 +150,7 @@ def set_color(
         raise HTTPException(status_code=400, detail=str(e)) from e
 
     tpc = request.app.state.tpc
+    request.app.state.effect_engine.stop()
     try:
         tpc.set_override_color(r, g, b, target="group", num=0, fade_seconds=1.0)
     except TPCError as e:

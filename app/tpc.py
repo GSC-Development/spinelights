@@ -277,6 +277,7 @@ class TPCClient:
         json: dict[str, Any] | None = None,
         authed: bool = False,
         retry_on_401: bool = True,
+        _conn_retry_done: bool = False,
     ) -> httpx.Response:
         headers: dict[str, str] = {}
         if json is not None:
@@ -286,6 +287,16 @@ class TPCClient:
 
         try:
             r = self._http.request(method, path, json=json, headers=headers)
+        except httpx.RemoteProtocolError as e:
+            # Pharos firmware sometimes closes the keep-alive connection
+            # between requests (notably after DELETE). The pool's next request
+            # then fails with "Server disconnected". Open a fresh connection
+            # by retrying once.
+            if not _conn_retry_done:
+                logger.debug("TPC dropped connection on %s %s, retrying", method, path)
+                return self._request(method, path, json=json, authed=authed,
+                                     retry_on_401=retry_on_401, _conn_retry_done=True)
+            raise TPCNotReachable(f"TPC dropped connection: {e}") from e
         except httpx.RequestError as e:
             raise TPCNotReachable(f"TPC request failed: {e}") from e
 
@@ -426,9 +437,18 @@ class TPCClient:
             target, num, red, green, blue, fade_seconds,
         )
 
-    def clear_overrides(self, *, fade_seconds: float = 0.5) -> None:
-        """Clear all active /api/override overrides. Daily schedule resumes."""
-        body = {"fade": float(fade_seconds)}
+    def clear_overrides(self, *, fade_seconds: float = 0.5, num_fixtures: int = 0) -> None:
+        """Clear active /api/override overrides.
+
+        A plain DELETE /api/override (no target) clears the implicit global
+        override but LEAVES per-fixture and per-group overrides in place. If
+        `num_fixtures` > 0, also iterate fixtures 1..num_fixtures and clear
+        each, plus clear group 0. Set this whenever previous activity may
+        have written per-fixture overrides (e.g. effect chase modes), or the
+        new push will be silently shadowed by the leftover state.
+        """
+        fade = float(fade_seconds)
+        body = {"fade": fade}
         r = self._request("DELETE", "/api/override", json=body, authed=True)
         if r.status_code >= 400:
             try:
@@ -440,4 +460,17 @@ class TPCClient:
             self._refresh_token_from_response(r.json())
         except ValueError:
             pass
-        logger.info("Cleared TPC overrides (fade=%.2fs)", fade_seconds)
+
+        if num_fixtures > 0:
+            # Scoped clears. We do them sequentially because this only runs at
+            # effect-stop / release, not in any hot loop. ~85 ms on LAN total.
+            for n in range(1, num_fixtures + 1):
+                self._request("DELETE", "/api/override",
+                              json={"target": "fixture", "num": n, "fade": fade},
+                              authed=True)
+            self._request("DELETE", "/api/override",
+                          json={"target": "group", "num": 0, "fade": fade},
+                          authed=True)
+
+        logger.info("Cleared TPC overrides (fade=%.2fs, num_fixtures=%d)",
+                    fade, num_fixtures)

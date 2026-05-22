@@ -1,0 +1,23 @@
+{# Status panel for /effects. Swapped in after start/stop. #}
+{% if current %}
+<div class="rounded-2xl p-6 ring-1 ring-white/20 shadow-2xl bg-gradient-to-br from-gray-800 to-gray-900
+            flex items-center gap-4">
+  <span class="inline-block w-4 h-4 rounded-full animate-pulse shadow-lg"
+        style="background-color: {{ current.swatch }}; box-shadow: 0 0 16px {{ current.swatch }};"></span>
+  <div class="flex-1 min-w-0">
+    <div class="text-xs uppercase tracking-[0.2em] text-gray-400">Effect running</div>
+    <div class="text-2xl font-bold truncate text-gray-100">{{ current.label }}</div>
+  </div>
+  <form hx-post="/effects/stop" hx-target="#effect-status" hx-swap="innerHTML">
+    <button type="submit"
+            class="px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl font-semibold text-sm
+                   shadow-lg shadow-red-500/30 transition-colors">
+      Stop
+    </button>
+  </form>
+</div>
+{% else %}
+<div class="rounded-2xl p-6 ring-1 ring-white/10 bg-white/[0.04] text-gray-400 text-sm">
+  No effect running. Pick one below.
+</div>
+{% endif %}

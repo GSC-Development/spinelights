@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% block title %}Effects - Pharos Scheduler{% endblock %}
+{% block content %}
+
+<div class="bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 text-gray-100
+            -mx-4 -my-4 sm:rounded-3xl px-4 sm:px-8 py-6 sm:py-8
+            min-h-[calc(100vh-4rem)] shadow-2xl shadow-black/40">
+
+  <div class="flex items-baseline justify-between mb-6">
+    <h1 class="text-3xl font-bold tracking-tight">Effects</h1>
+    <span class="text-[10px] uppercase tracking-[0.2em] text-gray-500 hidden sm:block">
+      17 spine fixtures · chase mode addresses each one
+    </span>
+  </div>
+
+  <section id="effect-status" class="mb-8">
+    {% include "_effect_status.html" %}
+  </section>
+
+  <div class="grid sm:grid-cols-2 gap-6">
+
+    {# ─── Rainbow ──────────────────────────────────────────────────────── #}
+    <div class="relative bg-white/[0.04] ring-1 ring-white/10 rounded-2xl p-6 backdrop-blur-sm overflow-hidden">
+      <div aria-hidden="true" class="absolute inset-0 opacity-20 pointer-events-none"
+           style="background: linear-gradient(90deg,#dc2626,#f97316,#facc15,#22c55e,#06b6d4,#3b82f6,#7c3aed,#ec4899);"></div>
+      <div class="relative">
+        <h3 class="text-2xl font-bold mb-2">Rainbow</h3>
+        <p class="text-sm text-gray-300 mb-4">Hue rotates through the full spectrum.</p>
+        <form hx-post="/effects/rainbow/start" hx-target="#effect-status" hx-swap="innerHTML"
+              class="flex items-end gap-3 flex-wrap">
+          <label class="flex-1 min-w-[100px]">
+            <span class="text-[10px] uppercase tracking-[0.2em] text-gray-400">Mode</span>
+            <select name="mode"
+                    class="mt-1 w-full bg-gray-900/80 border border-white/20 rounded px-3 py-2 text-sm">
+              <option value="together">Together</option>
+              <option value="chase">Chase across spine</option>
+            </select>
+          </label>
+          <label class="flex-1 min-w-[100px]">
+            <span class="text-[10px] uppercase tracking-[0.2em] text-gray-400">Speed</span>
+            <select name="speed"
+                    class="mt-1 w-full bg-gray-900/80 border border-white/20 rounded px-3 py-2 text-sm">
+              <option value="slow">Slow</option>
+              <option value="medium" selected>Medium</option>
+              <option value="fast">Fast</option>
+            </select>
+          </label>
+          <button type="submit"
+                  class="px-5 py-2.5 bg-blue-500 hover:bg-blue-400 text-white rounded-xl font-semibold text-sm shadow-lg shadow-blue-500/30">
+            Start
+          </button>
+        </form>
+      </div>
+    </div>
+
+    {# ─── Crossfade ────────────────────────────────────────────────────── #}
+    <div class="bg-white/[0.04] ring-1 ring-white/10 rounded-2xl p-6 backdrop-blur-sm">
+      <h3 class="text-2xl font-bold mb-2">Crossfade</h3>
+      <p class="text-sm text-gray-300 mb-4">Smoothly cycles through a colour palette.</p>
+      <form hx-post="/effects/crossfade/start" hx-target="#effect-status" hx-swap="innerHTML"
+            class="grid grid-cols-2 gap-3">
+        <label>
+          <span class="text-[10px] uppercase tracking-[0.2em] text-gray-400">Palette</span>
+          <select name="palette"
+                  class="mt-1 w-full bg-gray-900/80 border border-white/20 rounded px-3 py-2 text-sm">
+            {% for key in palettes.keys() %}
+            <option value="{{ key }}">{{ key|title }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>
+          <span class="text-[10px] uppercase tracking-[0.2em] text-gray-400">Mode</span>
+          <select name="mode"
+                  class="mt-1 w-full bg-gray-900/80 border border-white/20 rounded px-3 py-2 text-sm">
+            <option value="together">Together</option>
+            <option value="chase">Chase across spine</option>
+          </select>
+        </label>
+        <label>
+          <span class="text-[10px] uppercase tracking-[0.2em] text-gray-400">Speed</span>
+          <select name="speed"
+                  class="mt-1 w-full bg-gray-900/80 border border-white/20 rounded px-3 py-2 text-sm">
+            <option value="slow">Slow</option>
+            <option value="medium" selected>Medium</option>
+            <option value="fast">Fast</option>
+          </select>
+        </label>
+        <button type="submit"
+                class="self-end px-5 py-2.5 bg-blue-500 hover:bg-blue-400 text-white rounded-xl font-semibold text-sm shadow-lg shadow-blue-500/30">
+          Start
+        </button>
+      </form>
+    </div>
+
+    {# ─── Two-colour (spans both columns) ─────────────────────────────── #}
+    <div class="bg-white/[0.04] ring-1 ring-white/10 rounded-2xl p-6 backdrop-blur-sm sm:col-span-2 overflow-hidden relative">
+      <div aria-hidden="true" class="absolute inset-0 opacity-15 pointer-events-none"
+           style="background: linear-gradient(90deg,#dc2626 0%,#22c55e 100%);"></div>
+      <div class="relative">
+        <h3 class="text-2xl font-bold mb-2">Two colour</h3>
+        <p class="text-sm text-gray-300 mb-4">
+          Pick any two colours. Together = whole building alternates with a slow fade.
+          Chase = barber-pole pattern that travels along the 17 fixtures.
+        </p>
+        <form hx-post="/effects/two_color/start" hx-target="#effect-status" hx-swap="innerHTML"
+              class="flex items-end gap-4 flex-wrap">
+
+          <label>
+            <span class="text-[10px] uppercase tracking-[0.2em] text-gray-400">Colour A</span>
+            <input type="color" name="color_a" value="#dc2626"
+                   class="mt-1 h-12 w-20 rounded border border-white/20 cursor-pointer bg-transparent">
+          </label>
+          <label>
+            <span class="text-[10px] uppercase tracking-[0.2em] text-gray-400">Colour B</span>
+            <input type="color" name="color_b" value="#22c55e"
+                   class="mt-1 h-12 w-20 rounded border border-white/20 cursor-pointer bg-transparent">
+          </label>
+
+          <label class="flex-1 min-w-[120px]">
+            <span class="text-[10px] uppercase tracking-[0.2em] text-gray-400">Mode</span>
+            <select name="mode"
+                    class="mt-1 w-full bg-gray-900/80 border border-white/20 rounded px-3 py-2 text-sm">
+              <option value="together">Together (alternate)</option>
+              <option value="chase">Chase across spine</option>
+            </select>
+          </label>
+
+          <label class="flex-1 min-w-[120px]">
+            <span class="text-[10px] uppercase tracking-[0.2em] text-gray-400">Speed</span>
+            <select name="speed"
+                    class="mt-1 w-full bg-gray-900/80 border border-white/20 rounded px-3 py-2 text-sm">
+              <option value="slow">Slow</option>
+              <option value="medium" selected>Medium</option>
+              <option value="fast">Fast</option>
+            </select>
+          </label>
+
+          <button type="submit"
+                  class="px-5 py-2.5 bg-blue-500 hover:bg-blue-400 text-white rounded-xl font-semibold text-sm shadow-lg shadow-blue-500/30">
+            Start
+          </button>
+        </form>
+      </div>
+    </div>
+
+  </div>
+
+  <section class="mt-10">
+    <h2 class="text-sm font-semibold uppercase tracking-[0.2em] text-gray-400 mb-3">Palettes</h2>
+    <div class="grid sm:grid-cols-2 gap-3">
+      {% for key, hexes in palettes.items() %}
+      <div class="bg-white/[0.04] ring-1 ring-white/10 rounded-xl p-3 flex items-center gap-3">
+        <span class="text-sm font-medium w-20 shrink-0">{{ key|title }}</span>
+        <div class="flex gap-1 flex-1 h-6">
+          {% for h in hexes %}
+          <div class="flex-1 rounded" style="background-color: {{ h }};"></div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <p class="text-xs text-gray-500 mt-8">
+    Chase mode targets each of the 17 spine fixtures individually (≈85 requests / second).
+    Firing a preset on the Controller page, or pressing All Off, stops the running effect.
+  </p>
+
+</div>
+
+{% endblock %}

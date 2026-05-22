@@ -19,7 +19,8 @@ from starlette.middleware.sessions import SessionMiddleware
 from app import scheduler as scheduler_mod
 from app.config import get_settings
 from app.db import init_schema
-from app.routes import admin, auth, controls, dashboard, overrides
+from app.effects import EffectEngine
+from app.routes import admin, auth, controls, dashboard, effects, overrides
 from app.tpc import TPCClient
 
 logger = logging.getLogger(__name__)
@@ -67,9 +68,14 @@ async def lifespan(app: FastAPI):
     logger.info("Starting scheduler")
     scheduler_mod.init(tpc)
 
+    logger.info("Starting effect engine")
+    app.state.effect_engine = EffectEngine(tpc)
+
     try:
         yield
     finally:
+        logger.info("Stopping effect engine")
+        app.state.effect_engine.stop()
         logger.info("Shutting down scheduler")
         scheduler_mod.shutdown()
         logger.info("Closing TPC client")
@@ -101,6 +107,7 @@ def create_app() -> FastAPI:
     app.include_router(auth.router)
     app.include_router(dashboard.router)
     app.include_router(controls.router)
+    app.include_router(effects.router)
     app.include_router(overrides.router)
     app.include_router(admin.router)
 

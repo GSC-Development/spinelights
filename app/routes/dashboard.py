@@ -39,6 +39,11 @@ def _live_state(state, scene_lookup: dict[str, Scene]) -> tuple[str, str, str]:
         ov = state.active_override
         return (ov.swatch, f"{ov.display_scene_label} — {ov.name}", "Override active")
 
+    # Running app-side effect (rainbow, breathe, pulse, crossfade).
+    effect = getattr(state, "effect_current", None)
+    if effect is not None:
+        return (effect.swatch, effect.label, "Effect running")
+
     # Direct colour override (from /controls/color). The TPC has no GET for
     # active overrides, so we remember it in app state when we set it.
     direct = getattr(state, "direct_color", None)
@@ -69,8 +74,9 @@ def _panel_context(request: Request, db: Session) -> dict:
     """Shared context for the live state panel — used by both initial render and poll."""
     tpc = request.app.state.tpc
     state = get_dashboard_state(db, tpc)
-    # Attach the in-memory direct-colour override (set by /controls/color).
+    # Attach in-memory app state that lives outside the DB.
     state.direct_color = getattr(request.app.state, "direct_color", None)
+    state.effect_current = request.app.state.effect_engine.current
     lookup = _scene_lookup(db)
     bg, label, chip = _live_state(state, lookup)
     tz = ZoneInfo(get_settings().app_timezone)
