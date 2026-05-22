@@ -1,17 +1,22 @@
 # Drop in /etc/caddy/Caddyfile (or use sites-enabled if you've split it).
 #
 # This config:
-#   * Terminates HTTPS at Caddy (auto-TLS via your venue's internal CA, or
-#     self-signed for a quick start). Replace `lighting.internal.gsc.local`
-#     with whatever hostname resolves on your VLAN.
+#   * Serves the app at spine.gsc.org.uk on the venue LAN. The hostname
+#     resolves only on internal DNS (split-horizon) — Caddy issues a cert
+#     from its own internal CA via `tls internal`.
 #   * Proxies to the local uvicorn on 127.0.0.1:8000.
-#   * Logs to journald via Caddy's default systemd-journal output.
+#   * Blocks requests not originating from the venue LAN (defence in depth).
 #
-# For internal-only TLS (no public DNS), use Caddy's `tls internal` so it
-# issues from its own CA. Your devices will need to trust /var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt
-# (or distribute it via MDM).
+# First-time setup: devices will see a cert warning until they trust
+# Caddy's root CA. Find it at
+#   /var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt
+# and distribute via MDM, or have users add the exception manually.
+#
+# To switch to a real Let's Encrypt cert (requires DNS access to gsc.org.uk):
+# replace `tls internal` with `tls { dns <provider> <api_token_env> }`
+# using the appropriate Caddy DNS plugin.
 
-lighting.internal.gsc.local {
+spine.gsc.org.uk {
     encode zstd gzip
     tls internal
 

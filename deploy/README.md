@@ -64,7 +64,7 @@ journalctl -u pharos-scheduler -f
 curl -i http://127.0.0.1:8000/login
 
 # Via Caddy
-curl -ki https://lighting.internal.gsc.local/login
+curl -ki https://spine.gsc.org.uk/login
 ```
 
 ## Updating
