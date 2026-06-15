@@ -52,12 +52,9 @@ def _default_form_times() -> tuple[str, str]:
     return start.strftime(fmt), end.strftime(fmt)
 
 
-@router.get("/overrides")
-def list_overrides(
-    request: Request,
-    user: User = Depends(require_user),
-    db: Session = Depends(get_db),
-):
+def _list_context(db: Session, user: User) -> dict:
+    """Shared context for the overrides list — used by both the full page and
+    the HTMX poll fragment."""
     now = datetime.now(timezone.utc)
     cutoff = now + timedelta(days=14)
     upcoming = list(db.execute(
@@ -75,14 +72,38 @@ def list_overrides(
         .order_by(Override.end_at.desc())
         .limit(20)
     ).scalars())
+    return {
+        "user": user, "upcoming": upcoming, "past": past,
+        "local_tz": _local_tz(),
+        "settings": get_settings(),
+    }
+
+
+@router.get("/overrides")
+def list_overrides(
+    request: Request,
+    user: User = Depends(require_user),
+    db: Session = Depends(get_db),
+):
     return request.app.state.templates.TemplateResponse(
         request,
         "overrides_list.html",
-        {
-            "user": user, "upcoming": upcoming, "past": past,
-            "local_tz": _local_tz(),
-            "settings": get_settings(),
-        },
+        _list_context(db, user),
+    )
+
+
+@router.get("/overrides/poll")
+def list_overrides_poll(
+    request: Request,
+    user: User = Depends(require_user),
+    db: Session = Depends(get_db),
+):
+    """HTMX poll target: returns just the upcoming/past panel fragment, so
+    overrides programmed by other people show up without a manual reload."""
+    return request.app.state.templates.TemplateResponse(
+        request,
+        "_overrides_panel.html",
+        _list_context(db, user),
     )
 
 
