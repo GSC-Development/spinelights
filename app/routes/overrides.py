@@ -56,13 +56,11 @@ def _list_context(db: Session, user: User) -> dict:
     """Shared context for the overrides list — used by both the full page and
     the HTMX poll fragment."""
     now = datetime.now(timezone.utc)
-    cutoff = now + timedelta(days=14)
     upcoming = list(db.execute(
         select(Override)
         .where(
             Override.status.in_([OverrideStatus.SCHEDULED, OverrideStatus.ACTIVE]),
             Override.end_at > now,
-            Override.start_at < cutoff,
         )
         .order_by(Override.start_at)
     ).scalars())
