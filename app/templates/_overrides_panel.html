@@ -49,10 +49,16 @@
             </td>
             <td class="py-3 pr-4 text-right">
               {% if ov.created_by_id == user.id or user.role.value == "admin" %}
-              <form method="post" action="/overrides/{{ ov.id }}/cancel"
-                    onsubmit="return confirm('Cancel this override?');">
-                <button class="text-red-400 hover:text-red-300 text-sm font-medium">Cancel</button>
-              </form>
+              <div class="flex items-center justify-end gap-3">
+                {% if ov.status.value == "scheduled" and ov.scene_id is none %}
+                <a href="/overrides/{{ ov.id }}/edit"
+                   class="text-blue-400 hover:text-blue-300 text-sm font-medium">Edit</a>
+                {% endif %}
+                <form method="post" action="/overrides/{{ ov.id }}/cancel"
+                      onsubmit="return confirm('Cancel this override?');">
+                  <button class="text-red-400 hover:text-red-300 text-sm font-medium">Cancel</button>
+                </form>
+              </div>
               {% endif %}
             </td>
           </tr>

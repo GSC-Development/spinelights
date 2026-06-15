@@ -1,5 +1,7 @@
 {% extends "base.html" %}
-{% block title %}Add override{% endblock %}
+{% set heading = heading|default("Add override") %}
+{% set form_action = form_action|default("/overrides/new") %}
+{% block title %}{{ heading }}{% endblock %}
 {% block content %}
 
 <div class="bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 text-gray-100
@@ -7,7 +9,7 @@
             min-h-[calc(100vh-4rem)] shadow-2xl shadow-black/40">
 
   <div class="flex items-baseline justify-between mb-6">
-    <h1 class="text-3xl font-bold tracking-tight">Add override</h1>
+    <h1 class="text-3xl font-bold tracking-tight">{{ heading }}</h1>
     <a href="/overrides" class="text-sm text-gray-400 hover:text-gray-200">Cancel</a>
   </div>
 
@@ -46,7 +48,7 @@
   </div>
   {% endif %}
 
-  <form method="post" action="/overrides/new" id="override-form"
+  <form method="post" action="{{ form_action }}" id="override-form"
         class="bg-white/[0.04] ring-1 ring-white/10 rounded-2xl p-6 space-y-6 backdrop-blur-sm">
     {% if conflicts %}<input type="hidden" name="confirm_overlap" value="yes">{% endif %}
 

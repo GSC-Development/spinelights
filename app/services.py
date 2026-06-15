@@ -68,20 +68,36 @@ def find_conflicts(db: Session, start_at: datetime, end_at: datetime, exclude_id
     return list(db.execute(stmt).scalars())
 
 
-def create_override(
+@dataclass
+class _ResolvedOverride:
+    """Validated override fields, ready to write to a row."""
+    name: str
+    start_at: datetime
+    end_at: datetime
+    scene_id: str | None
+    color_hex: str | None
+    effect_name: str | None
+    effect_params_json: str | None
+    detail_target: str
+
+
+def _resolve_override_fields(
     db: Session,
     *,
-    creator: User,
     name: str,
     start_at: datetime,
     end_at: datetime,
-    scene_id: str | None = None,
-    color_hex: str | None = None,
-    effect_name: str | None = None,
-    effect_params: dict | None = None,
-    notes: str | None = None,
-) -> Override:
-    """Create an override. Exactly one of (scene_id, color_hex, effect_name) must be set."""
+    scene_id: str | None,
+    color_hex: str | None,
+    effect_name: str | None,
+    effect_params: dict | None,
+) -> _ResolvedOverride:
+    """Validate inputs and resolve them to storable column values.
+
+    Shared by create_override and update_override. Raises
+    OverrideValidationError on any problem. Exactly one of
+    (scene_id, color_hex, effect_name) must be set.
+    """
     start_at = _to_utc(start_at)
     end_at = _to_utc(end_at)
     now = datetime.now(timezone.utc)
@@ -145,7 +161,7 @@ def create_override(
         effect_params_json = _json.dumps(effect_params or {})
         detail_target = f"effect={en} params={effect_params_json}"
 
-    override = Override(
+    return _ResolvedOverride(
         name=name.strip(),
         start_at=start_at,
         end_at=end_at,
@@ -153,6 +169,38 @@ def create_override(
         color_hex=color_to_store,
         effect_name=effect_to_store,
         effect_params_json=effect_params_json,
+        detail_target=detail_target,
+    )
+
+
+def create_override(
+    db: Session,
+    *,
+    creator: User,
+    name: str,
+    start_at: datetime,
+    end_at: datetime,
+    scene_id: str | None = None,
+    color_hex: str | None = None,
+    effect_name: str | None = None,
+    effect_params: dict | None = None,
+    notes: str | None = None,
+) -> Override:
+    """Create an override. Exactly one of (scene_id, color_hex, effect_name) must be set."""
+    resolved = _resolve_override_fields(
+        db, name=name, start_at=start_at, end_at=end_at,
+        scene_id=scene_id, color_hex=color_hex,
+        effect_name=effect_name, effect_params=effect_params,
+    )
+
+    override = Override(
+        name=resolved.name,
+        start_at=resolved.start_at,
+        end_at=resolved.end_at,
+        scene_id=resolved.scene_id,
+        color_hex=resolved.color_hex,
+        effect_name=resolved.effect_name,
+        effect_params_json=resolved.effect_params_json,
         status=OverrideStatus.SCHEDULED,
         created_by_id=creator.id,
         notes=(notes or None),
@@ -166,11 +214,71 @@ def create_override(
         action=AuditAction.OVERRIDE_CREATED,
         target_type="override",
         target_id=override.id,
-        detail=f"{name!r} {start_at.isoformat()} -> {end_at.isoformat()} {detail_target}",
+        detail=f"{resolved.name!r} {resolved.start_at.isoformat()} -> "
+               f"{resolved.end_at.isoformat()} {resolved.detail_target}",
     ))
     db.commit()
     db.refresh(override)
 
+    scheduler_mod.schedule_override(override)
+    return override
+
+
+def update_override(
+    db: Session,
+    *,
+    override: Override,
+    actor: User,
+    name: str,
+    start_at: datetime,
+    end_at: datetime,
+    scene_id: str | None = None,
+    color_hex: str | None = None,
+    effect_name: str | None = None,
+    effect_params: dict | None = None,
+    notes: str | None = None,
+) -> Override:
+    """Edit a SCHEDULED override in place and re-schedule its jobs.
+
+    Only scheduled overrides may be edited — an active one is already driving
+    the lights, so callers should cancel it instead. Exactly one of
+    (scene_id, color_hex, effect_name) must be set.
+    """
+    if override.status != OverrideStatus.SCHEDULED:
+        raise OverrideValidationError(
+            f"only scheduled overrides can be edited (this one is "
+            f"{override.status.value})"
+        )
+
+    resolved = _resolve_override_fields(
+        db, name=name, start_at=start_at, end_at=end_at,
+        scene_id=scene_id, color_hex=color_hex,
+        effect_name=effect_name, effect_params=effect_params,
+    )
+
+    # Reset all three targets so switching colour <-> effect <-> scene is clean.
+    override.name = resolved.name
+    override.start_at = resolved.start_at
+    override.end_at = resolved.end_at
+    override.scene_id = resolved.scene_id
+    override.color_hex = resolved.color_hex
+    override.effect_name = resolved.effect_name
+    override.effect_params_json = resolved.effect_params_json
+    override.notes = (notes or None)
+
+    db.add(AuditLog(
+        actor_id=actor.id,
+        actor_username=actor.username,
+        action=AuditAction.OVERRIDE_UPDATED,
+        target_type="override",
+        target_id=override.id,
+        detail=f"{resolved.name!r} {resolved.start_at.isoformat()} -> "
+               f"{resolved.end_at.isoformat()} {resolved.detail_target}",
+    ))
+    db.commit()
+    db.refresh(override)
+
+    # replace_existing=True on both jobs, so this cleanly reschedules.
     scheduler_mod.schedule_override(override)
     return override
 
