@@ -25,10 +25,12 @@
         <tbody class="divide-y divide-white/5">
           {% for ov in upcoming %}
           <tr class="hover:bg-white/[0.03]">
+            {% set s = ov.start_at.astimezone(local_tz) %}
+            {% set e = ov.end_at.astimezone(local_tz) %}
             <td class="py-3 pr-4 text-gray-200">
-              {{ ov.start_at.astimezone(local_tz).strftime("%a %d %b %H:%M") }}
+              {{ s.strftime("%a %d %b %H:%M") }}
               <span class="text-gray-500">–</span>
-              {{ ov.end_at.astimezone(local_tz).strftime("%H:%M") }}
+              {% if e.date() == s.date() %}{{ e.strftime("%H:%M") }}{% else %}{{ e.strftime("%a %d %b %H:%M") }}{% endif %}
             </td>
             <td class="py-3 pr-4">
               <span class="inline-flex items-center gap-2">
